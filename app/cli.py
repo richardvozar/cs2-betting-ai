@@ -67,8 +67,8 @@ def probe():
 
 @app.command()
 def ingest_recent(limit: int = typer.Option(25, min=1, max=100),
-    """Fetch recent match pages and upsert their match and map records."""
                   pages: int = typer.Option(1, min=1, max=10)):
+    """Fetch recent match pages and upsert their match and map records."""
     s = get_settings()
     if not s.cs2_api_key:
         raise typer.BadParameter("Set CS2_API_KEY in .env")
