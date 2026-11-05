@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, Index, func
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, Index, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from app.db import Base
@@ -70,7 +70,7 @@ class MatchMap(Base):
     source_payload: Mapped[dict | None] = mapped_column(JSONB)
     __table_args__ = (
         UniqueConstraint("match_id", "map_number", name="uq_match_map_number"),
-        Index("ix_match_maps_external_id", "external_id", unique=True, postgresql_where=(external_id.is_not(None))),
+        Index("ix_match_maps_external_id", "external_id", unique=True, postgresql_where=text("external_id IS NOT NULL")),
     )
 
 
