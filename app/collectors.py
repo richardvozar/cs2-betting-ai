@@ -200,12 +200,15 @@ def ingest_match_player_stats(session, match_external_id, payload, endpoint=None
     envelope = payload if isinstance(payload, dict) else {}
     meta = envelope.get("meta") if isinstance(envelope.get("meta"), dict) else {}
     if meta.get("dataAvailable") is False:
+        _save_raw_record(session, endpoint, match.external_id, payload)
         session.commit()
         return {"players": 0, "stats": 0, "skipped": 0, "available": False}
 
     records = extract_data(payload)
     if not isinstance(records, list):
         raise ValueError("Expected player-statistics response data to be a list.")
+    if not records:
+        _save_raw_record(session, endpoint, match.external_id, payload)
     normalized = normalize_player_stats(records)
     stats_imported = 0
     skipped = 0
