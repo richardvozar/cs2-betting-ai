@@ -1,7 +1,7 @@
 import re
 from sqlalchemy import select
-from app.api.adapter import extract_data, normalize_match
-from app.models import Team, Tournament, Match, MatchMap, RawApiRecord
+from app.api.adapter import extract_data, normalize_match, normalize_player_stats
+from app.models import Team, Tournament, Match, MatchMap, Player, PlayerMapStats, RawApiRecord
 
 
 def slugify(value):
@@ -157,3 +157,113 @@ def ingest_recent_matches(session, payload, endpoint="/cs2/matches/recent"):
         imported += 1
     session.commit()
     return {"matches": imported, "maps": maps_imported}
+
+
+def _upsert_player(session, item):
+    if not item["player_external_id"]:
+        return None
+    player = session.scalar(select(Player).where(Player.external_id == item["player_external_id"]))
+    if player is None:
+        player = Player(
+            external_id=item["player_external_id"],
+            nickname=item["player_name"] or item["player_external_id"],
+        )
+        session.add(player)
+    if item["player_name"]:
+        player.nickname = item["player_name"]
+    player.country = item["player_country"] or player.country
+    player.slug = item["player_slug"] or player.slug
+    player.country_code = item["player_country_code"] or player.country_code
+    player.primary_role = item["player_primary_role"] or player.primary_role
+    session.flush()
+    return player
+
+
+def _find_map(session, match, external_id):
+    if external_id:
+        row = session.scalar(select(MatchMap).where(
+            MatchMap.match_id == match.id,
+            MatchMap.external_id == external_id,
+        ))
+        if row is not None:
+            return row
+    return None
+
+
+def ingest_match_player_stats(session, match_external_id, payload, endpoint=None):
+    """Upsert one match's per-map player statistics; maps must already be ingested."""
+    endpoint = endpoint or f"/cs2/matches/{match_external_id}/player-stats"
+    match = session.scalar(select(Match).where(Match.external_id == str(match_external_id)))
+    if match is None:
+        raise ValueError(f"Match {match_external_id!r} is not in the database; ingest matches/maps first.")
+
+    envelope = payload if isinstance(payload, dict) else {}
+    meta = envelope.get("meta") if isinstance(envelope.get("meta"), dict) else {}
+    if meta.get("dataAvailable") is False:
+        session.commit()
+        return {"players": 0, "stats": 0, "skipped": 0, "available": False}
+
+    records = extract_data(payload)
+    if not isinstance(records, list):
+        raise ValueError("Expected player-statistics response data to be a list.")
+    normalized = normalize_player_stats(records)
+    stats_imported = 0
+    skipped = 0
+
+    for item in normalized:
+        if item["match_external_id"] and item["match_external_id"] != match.external_id:
+            skipped += 1
+            continue
+        if not item["player_external_id"] or not item["map_external_id"]:
+            skipped += 1
+            continue
+        map_row = _find_map(session, match, item["map_external_id"])
+        if map_row is None:
+            skipped += 1
+            continue
+
+        player = _upsert_player(session, item)
+        team = upsert_team(session, item["team_name"], item["team_external_id"])
+        if player is None:
+            skipped += 1
+            continue
+
+        stat = None
+        if item["external_id"]:
+            stat = session.scalar(select(PlayerMapStats).where(
+                PlayerMapStats.external_id == item["external_id"]
+            ))
+        if stat is None:
+            stat = session.scalar(select(PlayerMapStats).where(
+                PlayerMapStats.map_id == map_row.id,
+                PlayerMapStats.player_id == player.id,
+            ))
+        if stat is None:
+            stat = PlayerMapStats(map_id=map_row.id, player_id=player.id)
+            session.add(stat)
+
+        stat.external_id = item["external_id"] or stat.external_id
+        stat.map_id = map_row.id
+        stat.player_id = player.id
+        stat.team_id = team.id if team else None
+        for field in (
+            "kills", "deaths", "assists", "plus_minus", "headshot_kills",
+            "headshot_percent", "first_kills", "first_deaths", "adr", "kast",
+            "rating", "rating_version", "ct_kills", "ct_deaths", "ct_adr",
+            "ct_kast", "ct_rating", "t_kills", "t_deaths", "t_adr", "t_kast",
+            "t_rating", "side_data_available", "data_quality", "confidence",
+            "confidence_score",
+        ):
+            setattr(stat, field, item[field])
+        stat.source_payload = item["raw"]
+        session.flush()
+        _save_raw_record(session, endpoint, item["external_id"] or f"{match.external_id}:{item['map_external_id']}:{item['player_external_id']}", item["raw"])
+        stats_imported += 1
+
+    session.commit()
+    return {
+        "players": len({item["player_external_id"] for item in normalized if item["player_external_id"]}),
+        "stats": stats_imported,
+        "skipped": skipped,
+        "available": True,
+    }
