@@ -6,6 +6,7 @@ from app.db import Base
 
 
 class Team(Base):
+    """A CS2 team identified by its provider ID, with optional ranking metadata."""
     __tablename__ = "teams"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     external_id: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
@@ -20,6 +21,7 @@ class Team(Base):
 
 
 class Tournament(Base):
+    """An event or tournament associated with one or more matches."""
     __tablename__ = "tournaments"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     external_id: Mapped[str | None] = mapped_column(String(120), unique=True)
@@ -28,6 +30,7 @@ class Tournament(Base):
 
 
 class Match(Base):
+    """A best-of match between two teams, including result and stats-eligibility metadata."""
     __tablename__ = "matches"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     external_id: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
@@ -50,6 +53,7 @@ class Match(Base):
 
 
 class MatchMap(Base):
+    """A single map in a match, including score, veto and result metadata."""
     __tablename__ = "match_maps"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     match_id: Mapped[int] = mapped_column(ForeignKey("matches.id", ondelete="CASCADE"), nullable=False)
@@ -75,6 +79,7 @@ class MatchMap(Base):
 
 
 class Player(Base):
+    """A player profile keyed by the stable identifier supplied by the provider."""
     __tablename__ = "players"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     external_id: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
@@ -86,6 +91,7 @@ class Player(Base):
 
 
 class PlayerMapStats(Base):
+    """One player's performance statistics on one specific match map."""
     __tablename__ = "player_map_stats"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     external_id: Mapped[str | None] = mapped_column(String(120))
@@ -96,6 +102,7 @@ class PlayerMapStats(Base):
     deaths: Mapped[int | None] = mapped_column(Integer)
     assists: Mapped[int | None] = mapped_column(Integer)
     plus_minus: Mapped[int | None] = mapped_column(Integer)
+    # Provider headshots are stored as a count; the percentage is a separate metric.
     headshot_kills: Mapped[int | None] = mapped_column(Integer)
     headshot_percent: Mapped[float | None] = mapped_column(Numeric(6, 2))
     first_kills: Mapped[int | None] = mapped_column(Integer)
@@ -104,6 +111,7 @@ class PlayerMapStats(Base):
     kast: Mapped[float | None] = mapped_column(Numeric(6, 2))
     rating: Mapped[float | None] = mapped_column(Numeric(5, 2))
     rating_version: Mapped[str | None] = mapped_column(String(40))
+    # CT and T splits are optional and must not be inferred from aggregate values.
     ct_kills: Mapped[int | None] = mapped_column(Integer)
     ct_deaths: Mapped[int | None] = mapped_column(Integer)
     ct_adr: Mapped[float | None] = mapped_column(Numeric(7, 2))
@@ -118,6 +126,7 @@ class PlayerMapStats(Base):
     data_quality: Mapped[str | None] = mapped_column(String(40))
     confidence: Mapped[str | None] = mapped_column(String(40))
     confidence_score: Mapped[float | None] = mapped_column(Numeric(5, 4))
+    # Preserve provider fields that are not represented by dedicated columns.
     source_payload: Mapped[dict | None] = mapped_column(JSONB)
     __table_args__ = (
         UniqueConstraint("map_id", "player_id", name="uq_player_map_stats"),
@@ -126,6 +135,7 @@ class PlayerMapStats(Base):
 
 
 class RawApiRecord(Base):
+    """A raw provider payload retained for reproducibility and later reprocessing."""
     __tablename__ = "raw_api_records"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     provider: Mapped[str] = mapped_column(String(80), nullable=False)
@@ -136,6 +146,7 @@ class RawApiRecord(Base):
 
 
 class ModelRun(Base):
+    """Metadata and evaluation metrics for a trained prediction model version."""
     __tablename__ = "model_runs"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     model_name: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -145,6 +156,7 @@ class ModelRun(Base):
 
 
 class Prediction(Base):
+    """A model probability and fair-odds estimate for a specific betting market."""
     __tablename__ = "predictions"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     model_run_id: Mapped[int] = mapped_column(ForeignKey("model_runs.id"), nullable=False)
