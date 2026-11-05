@@ -40,16 +40,25 @@ python -m app.cli probe
 ```
 `probe` calls only documented routes `/cs2` and `/cs2/matches/recent?limit=1&page=1`. It saves sample JSON under `data/api_samples/` and never prints the key.
 
-## 4. Import a small sample
+## 4. Upgrade an existing database
+If you already initialized the Phase 1 database, run the additive migration before importing the updated code:
 ```powershell
-python -m app.cli ingest-recent --limit 25 --pages 1
+python -m app.cli migrate-schema
 ```
-Increase pages only after checking your API quota. The importer saves raw payloads and upserts recognized teams, events and matches. Map/player detail ingestion is intentionally a follow-up after inspecting the actual response samples.
+This adds the new match/map metadata columns and a unique index for provider map IDs. It does not drop or rewrite existing rows. Run it once; it is safe to repeat.
 
-## 5. Tests
+## 5. Import a small sample
+```powershell
+python -m app.cli ingest-recent --limit 20 --pages 1
+```
+The importer now upserts matches, teams, tournaments and embedded map results. Re-running the same page updates the existing rows rather than creating duplicate match/map records. Existing name-based team records are retained; new imports use provider team IDs when available. Forfeit and non-played maps remain stored but are not marked as training-eligible when the API says otherwise.
+
+Increase pages only after checking your API quota. The recent response already includes map results in the inspected sample, so this command does not make extra per-match map requests.
+
+## 6. Tests
 ```powershell
 python -m pytest -q
 ```
 
 ## Scope
-No trained models or automated betting in Phase 1. The objective is a trustworthy, reproducible data foundation. Keep raw JSON, UTC timestamps, provider IDs, and historical snapshots. Use chronological splits later to prevent data leakage.
+No trained models or automated betting. Actual bets remain manual. The objective is a trustworthy, reproducible data foundation. Keep raw JSON, UTC timestamps, provider IDs, and historical snapshots. Use chronological splits later to prevent data leakage.
