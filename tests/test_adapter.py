@@ -1,4 +1,7 @@
-from app.api.adapter import extract_data, normalize_match, normalize_map, as_utc_datetime
+from app.api.adapter import (
+    extract_data, normalize_match, normalize_map, normalize_player_stat,
+    normalize_player_stats, as_utc_datetime,
+)
 
 
 def test_extract_data_envelope():
@@ -38,6 +41,31 @@ def test_normalize_map_keeps_overtime_scores():
     row = normalize_map({"mapNumber": 1, "team1Score": 24, "team2Score": 28})
     assert row["team1_score"] == 24
     assert row["team2_score"] == 28
+
+
+def test_normalize_player_stat_preserves_nulls_and_side_fields():
+    row = normalize_player_stat({
+        "id": "stat1", "mapId": "map1", "matchId": "match1",
+        "playerId": "player1", "playerName": "Example", "teamId": "team1",
+        "kills": 20, "deaths": 15, "assists": None, "plusMinus": 5,
+        "headshots": 10, "headshotPercent": 50.0, "firstKills": None,
+        "firstDeaths": 2, "adr": 80.5, "kast": 72.3, "rating": 1.12,
+        "ratingVersion": "2.1", "ctKills": 8, "ctDeaths": 7,
+        "ctAdr": 75.2, "ctKast": 70.0, "ctRating": 1.1,
+        "tKills": 12, "tDeaths": 8, "tAdr": 85.0, "tKast": 74.0,
+        "tRating": 1.14, "sideDataAvailable": True,
+        "dataQuality": "partial", "confidence": "medium", "confidenceScore": 0.7,
+    })
+    assert row["player_external_id"] == "player1"
+    assert row["map_external_id"] == "map1"
+    assert row["assists"] is None
+    assert row["first_kills"] is None
+    assert row["ct_kills"] == 8
+    assert row["confidence_score"] == 0.7
+
+
+def test_normalize_player_stats_ignores_non_dict_rows():
+    assert len(normalize_player_stats([{"id": "1"}, None, "bad"])) == 1
 
 
 def test_naive_datetime_assumed_utc():
