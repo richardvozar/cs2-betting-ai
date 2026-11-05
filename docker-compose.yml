@@ -1,0 +1,15 @@
+# Optional only. Native PostgreSQL is the selected setup, so Docker is not required.
+# Uncomment this service if you later decide to run PostgreSQL in Docker.
+# services:
+#   postgres:
+#     image: postgres:16
+#     environment:
+#       POSTGRES_DB: cs2_betting_ai
+#       POSTGRES_USER: cs2ai
+#       POSTGRES_PASSWORD: change_this_password
+#     ports:
+#       - "5432:5432"
+#     volumes:
+#       - cs2_pgdata:/var/lib/postgresql/data
+# volumes:
+#   cs2_pgdata:
