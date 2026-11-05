@@ -24,6 +24,13 @@ def _int(value):
         return None
 
 
+def _float(value):
+    try:
+        return float(value) if value is not None else None
+    except (ValueError, TypeError):
+        return None
+
+
 def _bool(value):
     return value if isinstance(value, bool) else None
 
@@ -88,3 +95,54 @@ def normalize_map(item, fallback_number=1):
         "unavailable_reason": item.get("unavailableReason"),
         "raw": item,
     }
+
+
+def normalize_player_stat(item):
+    player = item.get("player") if isinstance(item.get("player"), dict) else {}
+    team = item.get("team") if isinstance(item.get("team"), dict) else {}
+    return {
+        "external_id": _provider_id(item.get("id")),
+        "map_external_id": _provider_id(item.get("mapId")),
+        "match_external_id": _provider_id(item.get("matchId")),
+        "player_external_id": _provider_id(item.get("playerId") or player.get("id")),
+        "player_name": item.get("playerName") or player.get("nickname") or player.get("name"),
+        "player_slug": player.get("slug"),
+        "player_country": player.get("country"),
+        "player_country_code": player.get("countryCode"),
+        "player_primary_role": player.get("primaryRole") or player.get("role"),
+        "team_external_id": _provider_id(item.get("teamId") or team.get("id")),
+        "team_name": item.get("teamName") or team.get("name"),
+        "kills": _int(item.get("kills")),
+        "deaths": _int(item.get("deaths")),
+        "assists": _int(item.get("assists")),
+        "plus_minus": _int(item.get("plusMinus")),
+        "headshot_kills": _int(item.get("headshots")),
+        "headshot_percent": _float(item.get("headshotPercent")),
+        "first_kills": _int(item.get("firstKills")),
+        "first_deaths": _int(item.get("firstDeaths")),
+        "adr": _float(item.get("adr")),
+        "kast": _float(item.get("kast")),
+        "rating": _float(item.get("rating")),
+        "rating_version": item.get("ratingVersion"),
+        "ct_kills": _int(item.get("ctKills")),
+        "ct_deaths": _int(item.get("ctDeaths")),
+        "ct_adr": _float(item.get("ctAdr")),
+        "ct_kast": _float(item.get("ctKast")),
+        "ct_rating": _float(item.get("ctRating")),
+        "t_kills": _int(item.get("tKills")),
+        "t_deaths": _int(item.get("tDeaths")),
+        "t_adr": _float(item.get("tAdr")),
+        "t_kast": _float(item.get("tKast")),
+        "t_rating": _float(item.get("tRating")),
+        "side_data_available": _bool(item.get("sideDataAvailable")),
+        "data_quality": item.get("dataQuality"),
+        "confidence": item.get("confidence"),
+        "confidence_score": _float(item.get("confidenceScore")),
+        "raw": item,
+    }
+
+
+def normalize_player_stats(items):
+    if not isinstance(items, list):
+        return []
+    return [normalize_player_stat(item) for item in items if isinstance(item, dict)]
