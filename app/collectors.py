@@ -5,10 +5,12 @@ from app.models import Team, Tournament, Match, MatchMap, Player, PlayerMapStats
 
 
 def slugify(value):
+    """Create a lowercase, URL-friendly fallback identifier from a display name."""
     return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
 
 
 def _int_or_none(value):
+    """Convert optional ranking metadata to an integer without raising on invalid input."""
     try:
         return int(value) if value is not None else None
     except (ValueError, TypeError):
@@ -16,9 +18,13 @@ def _int_or_none(value):
 
 
 def upsert_team(session, name, external_id=None, metadata=None):
+    """Insert or update a team, preferring its stable provider ID over its name.
+
+Name-derived IDs are a fallback for records where the provider omits an ID."""
     if not name and not external_id:
         return None
     metadata = metadata if isinstance(metadata, dict) else {}
+    # Provider IDs are stable; name-derived IDs are only a compatibility fallback.
     ext_id = str(external_id) if external_id else "name:" + slugify(name)
     row = session.scalar(select(Team).where(Team.external_id == ext_id))
     if row is None:
@@ -36,6 +42,7 @@ def upsert_team(session, name, external_id=None, metadata=None):
 
 
 def _upsert_tournament(session, external_id, name):
+    """Insert or update an event using its provider ID when one is available."""
     if not external_id and not name:
         return None
     ext_id = str(external_id) if external_id else "name:" + slugify(name)
@@ -50,6 +57,7 @@ def _upsert_tournament(session, external_id, name):
 
 
 def _save_raw_record(session, endpoint, external_id, payload):
+    """Persist a raw provider payload, updating the existing endpoint/ID record if found."""
     row = session.scalar(
         select(RawApiRecord).where(
             RawApiRecord.provider == "citoapi_cs2",
@@ -67,6 +75,7 @@ def _save_raw_record(session, endpoint, external_id, payload):
 
 
 def _upsert_map(session, match, item, team1, team2):
+    """Insert or update one map and resolve winner/picker IDs against the match teams."""
     row = None
     if item["external_id"]:
         row = session.scalar(select(MatchMap).where(MatchMap.external_id == item["external_id"]))
@@ -101,6 +110,7 @@ def _upsert_map(session, match, item, team1, team2):
 
 
 def _team_pk(team1, team2, external_id):
+    """Resolve a provider team ID to one of the two local team primary keys."""
     if not external_id:
         return None
     if team1 and team1.external_id == external_id:
@@ -111,6 +121,10 @@ def _team_pk(team1, team2, external_id):
 
 
 def ingest_recent_matches(session, payload, endpoint="/cs2/matches/recent"):
+    """Upsert recent matches and their embedded map results.
+
+Commits the imported page and returns the number of matches and map rows
+processed. Raw source objects are retained for auditing and reprocessing."""
     records = extract_data(payload)
     if not isinstance(records, list):
         raise ValueError("Expected response data to be a list; inspect saved API sample.")
@@ -160,6 +174,7 @@ def ingest_recent_matches(session, payload, endpoint="/cs2/matches/recent"):
 
 
 def _upsert_player(session, item):
+    """Insert or update a player by provider ID and refresh available profile fields."""
     if not item["player_external_id"]:
         return None
     player = session.scalar(select(Player).where(Player.external_id == item["player_external_id"]))
@@ -180,6 +195,7 @@ def _upsert_player(session, item):
 
 
 def _find_map(session, match, external_id):
+    """Find a map by provider ID, constrained to the requested match."""
     if external_id:
         row = session.scalar(select(MatchMap).where(
             MatchMap.match_id == match.id,
@@ -212,9 +228,11 @@ def ingest_match_player_stats(session, match_external_id, payload, endpoint=None
     skipped = 0
 
     for item in normalized:
+        # Do not attach a row from another match based on a coincidental map reference.
         if item["match_external_id"] and item["match_external_id"] != match.external_id:
             skipped += 1
             continue
+        # Both references are required for an unambiguous map-level stat record.
         if not item["player_external_id"] or not item["map_external_id"]:
             skipped += 1
             continue
@@ -247,6 +265,7 @@ def ingest_match_player_stats(session, match_external_id, payload, endpoint=None
         stat.map_id = map_row.id
         stat.player_id = player.id
         stat.team_id = team.id if team else None
+        # Missing provider metrics remain NULL; no default zero is synthesized.
         for field in (
             "kills", "deaths", "assists", "plus_minus", "headshot_kills",
             "headshot_percent", "first_kills", "first_deaths", "adr", "kast",
