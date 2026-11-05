@@ -4,6 +4,7 @@ from app.models import Match
 
 
 class UnavailableStatsSession:
+    """Minimal session double that returns a known match for the unavailable-data test."""
     def __init__(self):
         self.committed = False
 
@@ -18,6 +19,7 @@ class UnavailableStatsSession:
 
 
 def test_unavailable_player_stats_are_a_safe_noop():
+    """Unavailable provider data is retained without creating player/stat rows."""
     session = UnavailableStatsSession()
     result = ingest_match_player_stats(
         session,
