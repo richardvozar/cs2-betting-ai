@@ -30,6 +30,7 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
+
 Edit `.env`: set `DATABASE_URL` and `CS2_API_KEY`. Never commit `.env`.
 
 ## 3. Initialize and verify
@@ -41,21 +42,28 @@ python -m app.cli probe
 `probe` calls only documented routes `/cs2` and `/cs2/matches/recent?limit=1&page=1`. It saves sample JSON under `data/api_samples/` and never prints the key.
 
 ## 4. Upgrade an existing database
-If you already initialized the Phase 1 database, run the additive migration before importing the updated code:
+Run all additive migrations before importing the updated code:
 ```powershell
 python -m app.cli migrate-schema
 ```
-This adds the new match/map metadata columns and a unique index for provider map IDs. It does not drop or rewrite existing rows. Run it once; it is safe to repeat.
+The command applies every numbered SQL migration in order and is safe to repeat. Migration 001 adds match/map metadata; migration 002 expands player profiles and map-level statistics. No existing rows are dropped. The team reference on player statistics is nullable because the API may omit reliable team context.
 
-## 5. Import a small sample
+## 5. Import matches and maps
 ```powershell
 python -m app.cli ingest-recent --limit 20 --pages 1
 ```
-The importer now upserts matches, teams, tournaments and embedded map results. Re-running the same page updates the existing rows rather than creating duplicate match/map records. Existing name-based team records are retained; new imports use provider team IDs when available. Forfeit and non-played maps remain stored but are not marked as training-eligible when the API says otherwise.
+The importer upserts matches, teams, tournaments and embedded map results. Re-running the same page updates existing rows rather than creating duplicate match/map records.
 
-Increase pages only after checking your API quota. The recent response already includes map results in the inspected sample, so this command does not make extra per-match map requests.
+## 6. Import player statistics for one match
+First make sure the match and its maps have been imported. Then run:
+```powershell
+python -m app.cli ingest-match-stats --match-id cs2-match-2400060
+```
+Replace the example with a provider match ID already stored in the database. The command makes one API request to `/cs2/matches/{matchId}/player-stats`. It upserts players by provider player ID and statistics by map/player, preserves null values and raw payloads, and skips rows that cannot be safely linked to a known map/player. A response with `meta.dataAvailable=false` is treated as unavailable rather than as an error.
 
-## 6. Tests
+The importer stores aggregate K/D/A, plus/minus, headshots, headshot percentage, first kills/deaths, ADR, KAST and rating, plus CT/T side splits and API data-quality/confidence fields when supplied. Missing fields remain NULL; no zeros or statistics are fabricated.
+
+## 7. Tests
 ```powershell
 python -m pytest -q
 ```
