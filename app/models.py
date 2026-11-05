@@ -80,22 +80,49 @@ class Player(Base):
     external_id: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
     nickname: Mapped[str] = mapped_column(String(100), nullable=False)
     country: Mapped[str | None] = mapped_column(String(60))
+    slug: Mapped[str | None] = mapped_column(String(160))
+    country_code: Mapped[str | None] = mapped_column(String(8))
+    primary_role: Mapped[str | None] = mapped_column(String(60))
 
 
 class PlayerMapStats(Base):
     __tablename__ = "player_map_stats"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    external_id: Mapped[str | None] = mapped_column(String(120))
     map_id: Mapped[int] = mapped_column(ForeignKey("match_maps.id", ondelete="CASCADE"), nullable=False)
     player_id: Mapped[int] = mapped_column(ForeignKey("players.id"), nullable=False)
-    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"), nullable=False)
+    team_id: Mapped[int | None] = mapped_column(ForeignKey("teams.id"))
     kills: Mapped[int | None] = mapped_column(Integer)
     deaths: Mapped[int | None] = mapped_column(Integer)
     assists: Mapped[int | None] = mapped_column(Integer)
+    plus_minus: Mapped[int | None] = mapped_column(Integer)
     headshot_kills: Mapped[int | None] = mapped_column(Integer)
+    headshot_percent: Mapped[float | None] = mapped_column(Numeric(6, 2))
+    first_kills: Mapped[int | None] = mapped_column(Integer)
+    first_deaths: Mapped[int | None] = mapped_column(Integer)
     adr: Mapped[float | None] = mapped_column(Numeric(7, 2))
     kast: Mapped[float | None] = mapped_column(Numeric(6, 2))
     rating: Mapped[float | None] = mapped_column(Numeric(5, 2))
-    __table_args__ = (UniqueConstraint("map_id", "player_id", name="uq_player_map_stats"),)
+    rating_version: Mapped[str | None] = mapped_column(String(40))
+    ct_kills: Mapped[int | None] = mapped_column(Integer)
+    ct_deaths: Mapped[int | None] = mapped_column(Integer)
+    ct_adr: Mapped[float | None] = mapped_column(Numeric(7, 2))
+    ct_kast: Mapped[float | None] = mapped_column(Numeric(6, 2))
+    ct_rating: Mapped[float | None] = mapped_column(Numeric(5, 2))
+    t_kills: Mapped[int | None] = mapped_column(Integer)
+    t_deaths: Mapped[int | None] = mapped_column(Integer)
+    t_adr: Mapped[float | None] = mapped_column(Numeric(7, 2))
+    t_kast: Mapped[float | None] = mapped_column(Numeric(6, 2))
+    t_rating: Mapped[float | None] = mapped_column(Numeric(5, 2))
+    side_data_available: Mapped[bool | None] = mapped_column()
+    data_quality: Mapped[str | None] = mapped_column(String(40))
+    confidence: Mapped[str | None] = mapped_column(String(40))
+    confidence_score: Mapped[float | None] = mapped_column(Numeric(5, 4))
+    source_payload: Mapped[dict | None] = mapped_column(JSONB)
+    __table_args__ = (
+        UniqueConstraint("map_id", "player_id", name="uq_player_map_stats"),
+        Index("ix_player_map_stats_external_id", "external_id", unique=True, postgresql_where=text("external_id IS NOT NULL")),
+    )
 
 
 class RawApiRecord(Base):
