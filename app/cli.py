@@ -14,11 +14,13 @@ app = typer.Typer(help="CS2 Betting AI — Phase 1 data tools")
 
 @app.command("init-db")
 def init_database():
+    """Create all database tables declared by the SQLAlchemy models."""
     init_db()
     print("[green]Database tables created.[/green]")
 
 
 def _run_migration(path):
+    """Execute the SQL statements in one migration file within a transaction."""
     statements = [part.strip() for part in path.read_text(encoding="utf-8").split(";") if part.strip()]
     with engine.begin() as conn:
         for statement in statements:
@@ -27,7 +29,9 @@ def _run_migration(path):
 
 @app.command("migrate-schema")
 def migrate_schema():
+    """Apply numbered SQL migration files in filename order."""
     root = Path(__file__).resolve().parent.parent / "migrations"
+    # Zero-padded migration filenames ensure schema changes run in sequence.
     for migration in sorted(root.glob("*.sql")):
         _run_migration(migration)
         print(f"[green]Applied {migration.name}.[/green]")
@@ -35,6 +39,7 @@ def migrate_schema():
 
 @app.command("db-check")
 def db_check():
+    """Verify that PostgreSQL accepts a simple query."""
     with engine.connect() as conn:
         conn.execute(text("SELECT 1"))
     print("[green]PostgreSQL connection OK.[/green]")
@@ -42,6 +47,7 @@ def db_check():
 
 @app.command()
 def probe():
+    """Call lightweight API endpoints and save response samples for inspection."""
     s = get_settings()
     if not s.cs2_api_key:
         raise typer.BadParameter("Set CS2_API_KEY in .env")
@@ -61,6 +67,7 @@ def probe():
 
 @app.command()
 def ingest_recent(limit: int = typer.Option(25, min=1, max=100),
+    """Fetch recent match pages and upsert their match and map records."""
                   pages: int = typer.Option(1, min=1, max=10)):
     s = get_settings()
     if not s.cs2_api_key:
@@ -69,6 +76,7 @@ def ingest_recent(limit: int = typer.Option(25, min=1, max=100),
     total_matches = 0
     total_maps = 0
     with SessionLocal() as session:
+        # Stop when the API returns an empty page or explicitly reports no next page.
         for page in range(1, pages + 1):
             payload = client.get_json("/cs2/matches/recent", {"limit": limit, "page": page})
             result = ingest_recent_matches(session, payload)
@@ -83,6 +91,7 @@ def ingest_recent(limit: int = typer.Option(25, min=1, max=100),
 
 @app.command("ingest-match-stats")
 def ingest_match_stats(match_id: str = typer.Option(..., "--match-id", help="Cito provider match ID")):
+    """Fetch and import per-map player statistics for one provider match ID."""
     s = get_settings()
     if not s.cs2_api_key:
         raise typer.BadParameter("Set CS2_API_KEY in .env")
